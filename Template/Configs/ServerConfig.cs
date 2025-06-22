@@ -7,6 +7,13 @@ namespace oomtm450PuckMod_Template.Configs {
     /// Class containing the configuration from oomtm450_template_serverconfig.json used for this mod.
     /// </summary>
     public class ServerConfig : IConfig {
+        #region Constants
+        /// <summary>
+        /// Const string, name used when sending the config data to the client.
+        /// </summary>
+        public const string CONFIG_DATA_NAME = Constants.MOD_NAME + "_config";
+        #endregion
+
         #region Properties
         /// <summary>
         /// Int, number of skaters that are allowed on the ice at the same time per team.
