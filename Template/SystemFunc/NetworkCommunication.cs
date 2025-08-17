@@ -56,7 +56,7 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="dataStr">String, content of the data.</param>
         /// <param name="listener">String, listener where to send the data.</param>
         /// <param name="config">IConfig, config for the logs.</param>
-        public static void SendDataToAll(string dataName, string dataStr, string listener, IConfig config = null, bool log = true) {
+        public static void SendDataToAll(string dataName, string dataStr, string listener, IConfig config = null) {
             try {
                 byte[] data = Encoding.UTF8.GetBytes(dataStr);
 
