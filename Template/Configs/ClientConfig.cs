@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using oomtm450PuckMod_Template.SystemFunc;
+using System;
 using System.IO;
 
 namespace oomtm450PuckMod_Template.Configs {
@@ -17,7 +18,7 @@ namespace oomtm450PuckMod_Template.Configs {
         /// </summary>
         /// <returns>String, serialized ClientConfig.</returns>
         public override string ToString() {
-            return JsonConvert.SerializeObject(this);
+            return JsonConvert.SerializeObject(this, Formatting.Indented);
         }
 
         /// <summary>
@@ -37,16 +38,27 @@ namespace oomtm450PuckMod_Template.Configs {
         internal static ClientConfig ReadConfig() {
             ClientConfig config = new ClientConfig();
 
-            string rootPath = Path.GetFullPath(".");
-            string configPath = Path.Combine(rootPath, Constants.MOD_NAME + "_clientconfig.json");
-            if (File.Exists(configPath)) {
-                string configFileContent = File.ReadAllText(configPath);
-                config = SetConfig(configFileContent);
+            try {
+                string rootPath = Path.GetFullPath(".");
+                string configPath = Path.Combine(rootPath, Constants.MOD_NAME + "_clientconfig.json");
+                if (File.Exists(configPath)) {
+                    string configFileContent = File.ReadAllText(configPath);
+                    config = SetConfig(configFileContent);
+                    Logging.Log($"Client config read.", config, true);
+                }
+
+                try {
+                    File.WriteAllText(configPath, config.ToString());
+                }
+                catch (Exception ex) {
+                    Logging.LogError($"Can't write the client config file. (Permission error ?)\n{ex}");
+                }
+
+                Logging.Log($"Wrote client config : {config}", config);
             }
-
-            File.WriteAllText(configPath, config.ToString());
-
-            Logging.Log($"Writing client config : {config}", config);
+            catch (Exception ex) {
+                Logging.LogError($"Can't read the client config file/folder. (Permission error ?)\n{ex}");
+            }
 
             return config;
         }

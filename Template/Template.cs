@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using oomtm450PuckMod_Template.Configs;
 using oomtm450PuckMod_Template.SystemFunc;
+using SingularityGroup.HotReload;
 using System;
 using System.Collections.Generic;
 using Unity.Netcode;
@@ -15,6 +16,16 @@ namespace oomtm450PuckMod_Template {
         /// Const string, version of the mod.
         /// </summary>
         private const string MOD_VERSION = "0.1.0DEV";
+
+        /// <summary>
+        /// Const string, last released version of the mod.
+        /// </summary>
+        private static readonly string OLD_MOD_VERSION = "0.0.0";
+
+        /// <summary>
+        /// Const string, tag to ask the server for the startup data.
+        /// </summary>
+        private const string ASK_SERVER_FOR_STARTUP_DATA = Constants.MOD_NAME + "ASKDATA";
         #endregion
 
         #region Fields
@@ -29,10 +40,82 @@ namespace oomtm450PuckMod_Template {
         private static ServerConfig _serverConfig = new ServerConfig();
 
         /// <summary>
-        /// ServerConfig, config set by the client.
+        /// Bool, true if the mod has been patched in.
+        /// </summary>
+        private static bool _harmonyPatched = false;
+
+        /// <summary>
+        /// Bool, true if the mod has registered with the named message handler for server/client communication.
+        /// </summary>
+        private static bool _hasRegisteredWithNamedMessageHandler = false;
+
+        #region Client-sided Fields
+        /// <summary>
+        /// ClientConfig, config set by the client.
         /// </summary>
         private static ClientConfig _clientConfig = new ClientConfig();
+
+        /// <summary>
+        /// DateTime, last time client asked the server for startup data.
+        /// </summary>
+        private static DateTime _lastDateTimeAskStartupData = DateTime.MinValue;
+
+        /// <summary>
+        /// Bool, true if the server has responded and sent the startup data.
+        /// </summary>
+        private static bool _serverHasResponded = false;
+
+        /// <summary>
+        /// Bool, true if the client needs to ask to be kicked because of versionning problems.
+        /// </summary>
+        private static bool _askForKick = false;
+
+        /// <summary>
+        /// Bool, true if the client needs to notify the user that the server is running an out of date version of the mod.
+        /// </summary>
+        private static bool _addServerModVersionOutOfDateMessage = false;
         #endregion
+        #endregion
+
+        /// <summary>
+        /// Class that patches the UpdatePlayer event from UIScoreboard.
+        /// </summary>
+        [HarmonyPatch(typeof(UIScoreboard), nameof(UIScoreboard.UpdatePlayer))]
+        public class UIScoreboard_UpdatePlayer_Patch {
+            [HarmonyPostfix]
+            public static void Postfix(Player player) {
+                try {
+                    // If this is the server, do not use the patch.
+                    if (ServerFunc.IsDedicatedServer())
+                        return;
+
+                    if (!_hasRegisteredWithNamedMessageHandler || !_serverHasResponded) {
+                        //Logging.Log($"RegisterNamedMessageHandler {Constants.FROM_SERVER}.", _clientConfig);
+                        NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler(Constants.FROM_SERVER, ReceiveData);
+                        _hasRegisteredWithNamedMessageHandler = true;
+
+                        DateTime now = DateTime.UtcNow;
+                        if (_lastDateTimeAskStartupData + TimeSpan.FromSeconds(1) < now) {
+                            _lastDateTimeAskStartupData = now;
+                            NetworkCommunication.SendData(ASK_SERVER_FOR_STARTUP_DATA, "1", NetworkManager.ServerClientId, Constants.FROM_CLIENT, _clientConfig);
+                        }
+                    }
+
+                    if (_askForKick) {
+                        _askForKick = false;
+                        NetworkCommunication.SendData(Constants.MOD_NAME + "_kick", "1", NetworkManager.ServerClientId, Constants.FROM_CLIENT, _clientConfig);
+                    }
+
+                    if (_addServerModVersionOutOfDateMessage) {
+                        _addServerModVersionOutOfDateMessage = false;
+                        UIChat.Instance.AddChatMessage($"{player.Username.Value} : Server's {Constants.WORKSHOP_MOD_NAME} mod is out of date. Some functionalities might not work properly.");
+                    }
+                }
+                catch (Exception ex) {
+                    Logging.LogError($"Error in UIScoreboard_UpdateServer_Patch Postfix().\n{ex}");
+                }
+            }
+        }
 
         /// <summary>
         /// Class that patches the Event_Client_OnPositionSelectClickPosition event from PlayerPositionManagerController.
@@ -156,6 +239,97 @@ namespace oomtm450PuckMod_Template {
         }
 
         /// <summary>
+        /// Method called when a client has connected (joined a server) on the server-side.
+        /// Used to set server-sided stuff after the game has loaded.
+        /// </summary>
+        /// <param name="message">Dictionary of string and object, content of the event.</param>
+        public static void Event_OnClientConnected(Dictionary<string, object> message) {
+            if (!ServerFunc.IsDedicatedServer())
+                return;
+
+            Logging.Log("Event_OnClientConnected", _serverConfig);
+
+            try {
+                if (NetworkManager.Singleton != null && !_hasRegisteredWithNamedMessageHandler) {
+                    Logging.Log($"RegisterNamedMessageHandler {Constants.FROM_CLIENT}.", _serverConfig);
+                    NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler(Constants.FROM_CLIENT, ReceiveData);
+                    _hasRegisteredWithNamedMessageHandler = true;
+                }
+
+                ulong clientId = (ulong)message["clientId"];
+                string clientSteamId = PlayerManager.Instance.GetPlayerByClientId(clientId).SteamId.Value.ToString();
+                try {
+                    PlayerFunc.Players_ClientId_SteamId.Add(clientId, "");
+                }
+                catch {
+                    PlayerFunc.Players_ClientId_SteamId.Remove(clientId);
+                    PlayerFunc.Players_ClientId_SteamId.Add(clientId, "");
+                }
+            }
+            catch (Exception ex) {
+                Logging.LogError($"Error in Event_OnClientConnected.\n{ex}");
+            }
+        }
+
+        /// <summary>
+        /// Method called when a client has disconnect (left a server) on the server-side.
+        /// Used to unset data linked to the player.
+        /// </summary>
+        /// <param name="message">Dictionary of string and object, content of the event.</param>
+        public static void Event_OnClientDisconnected(Dictionary<string, object> message) {
+            if (!ServerFunc.IsDedicatedServer())
+                return;
+
+            Logging.Log("Event_OnClientDisconnected", _serverConfig);
+
+            try {
+                ulong clientId = (ulong)message["clientId"];
+                string clientSteamId;
+                try {
+                    clientSteamId = PlayerFunc.Players_ClientId_SteamId[clientId];
+                }
+                catch {
+                    Logging.LogError($"Client Id {clientId} steam Id not found in {nameof(PlayerFunc.Players_ClientId_SteamId)}.");
+                    return;
+                }
+
+                //_sentOutOfDateMessage.Remove(clientId);
+
+                PlayerFunc.Players_ClientId_SteamId.Remove(clientId);
+            }
+            catch (Exception ex) {
+                Logging.LogError($"Error in Event_OnClientDisconnected.\n{ex}");
+            }
+        }
+
+        /// <summary>
+        /// Method called when a player changes their role.
+        /// Used to set a link between steamIds and clientIds.
+        /// </summary>
+        /// <param name="message">Dictionary of string and object, content of the event.</param>
+        public static void Event_OnPlayerRoleChanged(Dictionary<string, object> message) {
+            Dictionary<ulong, string> players_ClientId_SteamId_ToChange = new Dictionary<ulong, string>();
+            foreach (var kvp in PlayerFunc.Players_ClientId_SteamId) {
+                if (string.IsNullOrEmpty(kvp.Value))
+                    players_ClientId_SteamId_ToChange.Add(kvp.Key, PlayerManager.Instance.GetPlayerByClientId(kvp.Key).SteamId.Value.ToString());
+            }
+
+            foreach (var kvp in players_ClientId_SteamId_ToChange) {
+                if (!string.IsNullOrEmpty(kvp.Value)) {
+                    PlayerFunc.Players_ClientId_SteamId[kvp.Key] = kvp.Value;
+                    Logging.Log($"Added clientId {kvp.Key} linked to Steam Id {kvp.Value}.", _serverConfig);
+                }
+            }
+
+            Player player = (Player)message["player"];
+
+            string playerSteamId = player.SteamId.Value.ToString();
+
+            if (string.IsNullOrEmpty(playerSteamId))
+                return;
+        }
+
+        /// <summary>
         /// Method called when the client has started on the client-side.
         /// Used to register to the server messaging (config sync and version check).
         /// </summary>
@@ -231,23 +405,48 @@ namespace oomtm450PuckMod_Template {
 
                 switch (dataName) {
                     case Constants.MOD_NAME + "_" + nameof(MOD_VERSION): // CLIENT-SIDE : Mod version check, kick if client and server versions are not the same.
-                        if (MOD_VERSION == dataStr) // TODO : Move the kick later so that it doesn't break anything. Maybe even add a chat message and a 3-5 sec wait.
+                        _serverHasResponded = true;
+                        if (MOD_VERSION == dataStr) // TODO : Maybe add a chat message and a 3-5 sec wait.
                             break;
+                        else if (OLD_MOD_VERSION == dataStr) {
+                            _addServerModVersionOutOfDateMessage = true;
+                            break;
+                        }
 
-                        NetworkCommunication.SendData(Constants.MOD_NAME + "_" + "kick", "1", clientId, Constants.FROM_SERVER, _serverConfig);
+                        _askForKick = true;
                         break;
 
                     case ServerConfig.CONFIG_DATA_NAME: // CLIENT-SIDE : Set the server config on the client to use later for the Template logic, since the logic happens on the client.
                         _serverConfig = ServerConfig.SetConfig(dataStr);
                         break;
 
-                    case Constants.MOD_NAME + "_" + "kick": // SERVER-SIDE : Kick the client that asked to be kicked.
+                    case Constants.MOD_NAME + "_kick": // SERVER-SIDE : Kick the client that asked to be kicked.
                         if (dataStr != "1")
                             break;
 
                         Logging.Log($"Kicking client {clientId}.", _serverConfig);
                         NetworkManager.Singleton.DisconnectClient(clientId,
-                            $"Mod is out of date. Please restart your game or unsubscribe from {Constants.WORKSHOP_MOD_NAME} in the workshop to update.");
+                            $"Mod is out of date. Please unsubscribe from {Constants.WORKSHOP_MOD_NAME} in the workshop and restart your game to update.");
+
+                        /*if (!_sentOutOfDateMessage.TryGetValue(clientId, out DateTime lastCheckTime)) {
+                            lastCheckTime = DateTime.MinValue;
+                            _sentOutOfDateMessage.Add(clientId, lastCheckTime);
+                        }
+
+                        DateTime utcNow = DateTime.UtcNow;
+                        if (lastCheckTime + TimeSpan.FromSeconds(900) < utcNow) {
+                            if (string.IsNullOrEmpty(PlayerManager.Instance.GetPlayerByClientId(clientId).Username.Value.ToString()))
+                                break;
+                            UIChat.Instance.Server_SendSystemChatMessage($"{PlayerManager.Instance.GetPlayerByClientId(clientId).Username.Value} : {Constants.WORKSHOP_MOD_NAME} Mod is out of date. Please unsubscribe from {Constants.WORKSHOP_MOD_NAME} in the workshop and restart your game to update.");
+                            _sentOutOfDateMessage[clientId] = utcNow;
+                        }*/
+                        break;
+
+                    case ASK_SERVER_FOR_STARTUP_DATA: // SERVER-SIDE : Send the necessary data to client.
+                        if (dataStr != "1")
+                            break;
+
+                        NetworkCommunication.SendData(Constants.MOD_NAME + "_" + nameof(MOD_VERSION), MOD_VERSION, clientId, Constants.FROM_SERVER, _serverConfig);
                         break;
                 }
             }
@@ -269,9 +468,13 @@ namespace oomtm450PuckMod_Template {
                 Logging.Log($"Enabled.", _serverConfig, true);
 
                 if (ServerFunc.IsDedicatedServer()) {
-                    Logging.Log("Setting server sided config.", _serverConfig, true);
-                    NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler(Constants.FROM_CLIENT, ReceiveData);
+                    if (NetworkManager.Singleton != null && NetworkManager.Singleton.CustomMessagingManager != null) {
+                        Logging.Log($"RegisterNamedMessageHandler {Constants.FROM_CLIENT}.", _serverConfig);
+                        NetworkManager.Singleton.CustomMessagingManager.RegisterNamedMessageHandler(Constants.FROM_CLIENT, ReceiveData);
+                        _hasRegisteredWithNamedMessageHandler = true;
+                    }
 
+                    Logging.Log("Setting server sided config.", _serverConfig, true);
                     _serverConfig = ServerConfig.ReadConfig(ServerManager.Instance.AdminSteamIds);
                 }
                 else {
@@ -280,10 +483,20 @@ namespace oomtm450PuckMod_Template {
                 }
 
                 Logging.Log("Subscribing to events.", _serverConfig, true);
-                EventManager.Instance.AddEventListener("Event_Client_OnClientStarted", Event_Client_OnClientStarted);
-                EventManager.Instance.AddEventListener("Event_Client_OnClientStopped", Event_Client_OnClientStopped);
-                EventManager.Instance.AddEventListener("Event_OnPlayerSpawned", Event_OnPlayerSpawned);
+                if (ServerFunc.IsDedicatedServer()) {
+                    // Server-side events.
+                    EventManager.Instance.AddEventListener("Event_OnClientConnected", Event_OnClientConnected);
+                    EventManager.Instance.AddEventListener("Event_OnClientDisconnected", Event_OnClientDisconnected);
+                    EventManager.Instance.AddEventListener("Event_OnPlayerRoleChanged", Event_OnPlayerRoleChanged);
+                }
+                else {
+                    // Client-side events.
+                    EventManager.Instance.AddEventListener("Event_Client_OnClientStarted", Event_Client_OnClientStarted);
+                    EventManager.Instance.AddEventListener("Event_Client_OnClientStopped", Event_Client_OnClientStopped);
+                    EventManager.Instance.AddEventListener("Event_OnPlayerSpawned", Event_OnPlayerSpawned);
+                }
 
+                _harmonyPatched = true;
                 return true;
             }
             catch (Exception ex) {
@@ -298,17 +511,34 @@ namespace oomtm450PuckMod_Template {
         /// <returns>Bool, true if the mod successfully disabled.</returns>
         public bool OnDisable() {
             try {
-                Logging.Log("Unsubscribing from events.", _serverConfig, true);
-
-                EventManager.Instance.RemoveEventListener("Event_Client_OnClientStarted", Event_Client_OnClientStarted);
-                EventManager.Instance.RemoveEventListener("Event_Client_OnClientStopped", Event_Client_OnClientStopped);
-                EventManager.Instance.RemoveEventListener("Event_OnPlayerSpawned", Event_OnPlayerSpawned);
+                if (!_harmonyPatched)
+                    return true;
 
                 Logging.Log($"Disabling...", _serverConfig, true);
+
+                Logging.Log("Unsubscribing from events.", _serverConfig, true);
+                if (ServerFunc.IsDedicatedServer()) {
+                    EventManager.Instance.RemoveEventListener("Event_OnClientConnected", Event_OnClientConnected);
+                    EventManager.Instance.RemoveEventListener("Event_OnClientDisconnected", Event_OnClientDisconnected);
+                    EventManager.Instance.RemoveEventListener("Event_OnPlayerRoleChanged", Event_OnPlayerRoleChanged);
+                    NetworkManager.Singleton?.CustomMessagingManager?.UnregisterNamedMessageHandler(Constants.FROM_CLIENT);
+                }
+                else {
+                    EventManager.Instance.RemoveEventListener("Event_Client_OnClientStarted", Event_Client_OnClientStarted);
+                    EventManager.Instance.RemoveEventListener("Event_Client_OnClientStopped", Event_Client_OnClientStopped);
+                    EventManager.Instance.RemoveEventListener("Event_OnPlayerSpawned", Event_OnPlayerSpawned);
+                    Event_Client_OnClientStopped(new Dictionary<string, object>());
+                    NetworkManager.Singleton?.CustomMessagingManager?.UnregisterNamedMessageHandler(Constants.FROM_SERVER);
+                }
+
+                _hasRegisteredWithNamedMessageHandler = false;
+                _serverHasResponded = false;
 
                 _harmony.UnpatchSelf();
 
                 Logging.Log($"Disabled.", _serverConfig, true);
+
+                _harmonyPatched = false;
                 return true;
             }
             catch (Exception ex) {

@@ -2,6 +2,7 @@
 
 namespace oomtm450PuckMod_Template.SystemFunc {
     internal class PlayerFunc {
+        #region Constants
         /// <summary>
         /// Const string, position name for the goalie.
         /// </summary>
@@ -26,7 +27,16 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// Const string, position name for the right defender.
         /// </summary>
         internal const string RIGHT_DEFENDER_POSITION = "RD";
+        #endregion
 
+        #region Properties
+        /// <summary>
+        /// LockDictionary of ulong and string, dictionary of all players
+        /// </summary>
+        internal static LockDictionary<ulong, string> Players_ClientId_SteamId { get; } = new LockDictionary<ulong, string>();
+        #endregion
+
+        #region Methods/Functions
         /// <summary>
         /// Function that checks if the current client is an admin using the config.
         /// </summary>
@@ -79,5 +89,6 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         internal static bool IsGoalie(PlayerPosition pPosition, bool hasToBeClaimed = true) {
             return IsRole(pPosition, PlayerRole.Goalie, hasToBeClaimed);
         }
+        #endregion
     }
 }

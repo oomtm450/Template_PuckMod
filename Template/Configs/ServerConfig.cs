@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using oomtm450PuckMod_Template.SystemFunc;
+using System;
 using System.IO;
 
 namespace oomtm450PuckMod_Template.Configs {
@@ -63,7 +64,7 @@ namespace oomtm450PuckMod_Template.Configs {
         /// </summary>
         /// <returns>String, serialized config.</returns>
         public override string ToString() {
-            return JsonConvert.SerializeObject(this);
+            return JsonConvert.SerializeObject(this, Formatting.Indented);
         }
 
         /// <summary>
@@ -84,16 +85,27 @@ namespace oomtm450PuckMod_Template.Configs {
         internal static ServerConfig ReadConfig(string[] adminSteamIds) {
             ServerConfig config = new ServerConfig();
 
-            string rootPath = Path.GetFullPath(".");
-            string configPath = Path.Combine(rootPath, Constants.MOD_NAME + "_serverconfig.json");
-            if (File.Exists(configPath)) {
-                string configFileContent = File.ReadAllText(configPath);
-                config = SetConfig(configFileContent);
+            try {
+                string rootPath = Path.GetFullPath(".");
+                string configPath = Path.Combine(rootPath, Constants.MOD_NAME + "_serverconfig.json");
+                if (File.Exists(configPath)) {
+                    string configFileContent = File.ReadAllText(configPath);
+                    config = SetConfig(configFileContent);
+                    Logging.Log($"Server config read.", config, true);
+                }
+
+                try {
+                    File.WriteAllText(configPath, config.ToString());
+                }
+                catch (Exception ex) {
+                    Logging.LogError($"Can't write the server config file. (Permission error ?)\n{ex}");
+                }
+
+                Logging.Log($"Wrote server config : {config}", config);
             }
-
-            File.WriteAllText(configPath, config.ToString());
-
-            Logging.Log($"Writing server config : {config}", config);
+            catch (Exception ex) {
+                Logging.LogError($"Can't read the server config file/folder. (Permission error ?)\n{ex}");
+            }
 
             config.SentByServer = true;
             config.AdminSteamIds = adminSteamIds;
