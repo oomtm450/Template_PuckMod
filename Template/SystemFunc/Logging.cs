@@ -1,6 +1,5 @@
 ﻿using oomtm450PuckMod_Template.Configs;
 using UnityEngine;
-using static UnityEngine.Rendering.STP;
 
 namespace oomtm450PuckMod_Template.SystemFunc {
     internal class Logging {
