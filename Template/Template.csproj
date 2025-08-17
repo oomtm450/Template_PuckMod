@@ -3,6 +3,7 @@
   <PropertyGroup>
     <AssemblyName>oomtm450PuckMod_Template</AssemblyName>
     <TargetFramework>net4.8</TargetFramework>
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
