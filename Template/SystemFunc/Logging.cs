@@ -11,15 +11,16 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="bypassConfig">Bool, true to bypass the logs config. False by default.</param>
         internal static void Log(string msg, IConfig config, bool bypassConfig = false) {
             if (bypassConfig || config == null || config.LogInfo)
-                Debug.Log($"[{Constants.MOD_NAME}] {msg}");
+                Debug.Log($"[{config.ModName}] {msg}");
         }
 
         /// <summary>
         /// Function that logs errors to the debug console.
         /// </summary>
         /// <param name="msg">String, message to log.</param>
-        internal static void LogError(string msg) {
-            Debug.LogError($"[{Constants.MOD_NAME}] {msg}");
+        /// <param name="config">IConfig, config to use.</param>
+        internal static void LogError(string msg, IConfig config) {
+            Debug.LogError($"[{config.ModName}] {msg}");
         }
 
         /// <summary>
@@ -30,7 +31,7 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="bypassConfig">Bool, true to bypass the logs config. False by default.</param>
         internal static void LogWarning(string msg, IConfig config, bool bypassConfig = false) {
             if (bypassConfig || config == null || config.LogInfo)
-                Debug.LogWarning($"[{Constants.MOD_NAME}] {msg}");
+                Debug.LogWarning($"[{config.ModName}] {msg}");
         }
     }
 }

@@ -1,7 +1,6 @@
 ﻿using oomtm450PuckMod_Template.Configs;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Text;
 using Unity.Collections;
 using Unity.Netcode;
@@ -10,14 +9,35 @@ namespace oomtm450PuckMod_Template.SystemFunc {
     /// <summary>
     /// Class containing code for network communication from/to client/server.
     /// </summary>
-    internal static class NetworkCommunication {
-        #region Constants
+    public static class NetworkCommunication {
+        #region Properties
         /// <summary>
         /// ReadOnlyCollection of string, collection of datanames to not log.
         /// </summary>
-        private static readonly ReadOnlyCollection<string> DATANAMES_TO_IGNORE_LOG = new ReadOnlyCollection<string>(new List<string> {
-        });
+        private static readonly List<string> DataNamesToIgnore = new List<string>();
         #endregion
+
+        #region Methods/Functions
+        /// <summary>
+        /// Method that add a list of data names to not log during send and get data.
+        /// </summary>
+        /// <param name="dataNamesToNotLog">ICollection of string, data names to add to the to not log list.</param>
+        public static void AddToNotLogList(ICollection<string> dataNamesToNotLog) {
+            DataNamesToIgnore.AddRange(dataNamesToNotLog);
+        }
+
+        /// <summary>
+        /// Method that removes a list of data names to not log during send and get data.
+        /// </summary>
+        /// <param name="dataNamesToNotLog">ICollection of string, data names to remove from the to not log list.</param>
+        public static void RemoveFromNotLogList(ICollection<string> dataNamesToNotLog) {
+            foreach (string dataName in dataNamesToNotLog)
+                DataNamesToIgnore.Remove(dataName);
+        }
+
+        public static List<string> GetDataNamesToIgnore() {
+            return new List<string>(DataNamesToIgnore);
+        }
 
         /// <summary>
         /// Method that sends data to the listener.
@@ -27,7 +47,7 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="clientId">Ulong, Id of the client that is sending the data.</param>
         /// <param name="listener">String, listener where to send the data.</param>
         /// <param name="config">IConfig, config for the logs.</param>
-        public static void SendData(string dataName, string dataStr, ulong clientId, string listener, IConfig config = null) {
+        public static void SendData(string dataName, string dataStr, ulong clientId, string listener, IConfig config) {
             try {
                 byte[] data = Encoding.UTF8.GetBytes(dataStr);
 
@@ -41,11 +61,11 @@ namespace oomtm450PuckMod_Template.SystemFunc {
 
                 writer.Dispose();
 
-                if (!DATANAMES_TO_IGNORE_LOG.Contains(dataName))
+                if (!DataNamesToIgnore.Contains(dataName))
                     Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to {clientId}.", config);
             }
             catch (Exception ex) {
-                Logging.LogError($"Error when writing streamed data: {ex}");
+                Logging.LogError($"Error when writing streamed data: {ex}", config);
             }
         }
 
@@ -56,7 +76,7 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="dataStr">String, content of the data.</param>
         /// <param name="listener">String, listener where to send the data.</param>
         /// <param name="config">IConfig, config for the logs.</param>
-        public static void SendDataToAll(string dataName, string dataStr, string listener, IConfig config = null) {
+        public static void SendDataToAll(string dataName, string dataStr, string listener, IConfig config) {
             try {
                 byte[] data = Encoding.UTF8.GetBytes(dataStr);
 
@@ -70,11 +90,11 @@ namespace oomtm450PuckMod_Template.SystemFunc {
 
                 writer.Dispose();
 
-                if (!DATANAMES_TO_IGNORE_LOG.Contains(dataName))
+                if (!DataNamesToIgnore.Contains(dataName))
                     Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to all clients.", config);
             }
             catch (Exception ex) {
-                Logging.LogError($"Error when writing streamed data: {ex}");
+                Logging.LogError($"Error when writing streamed data: {ex}", config);
             }
         }
 
@@ -85,7 +105,7 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="reader">FastBufferReader, reader containing the data.</param>
         /// <param name="config">IConfig, config for the logs.</param>
         /// <returns>(string DataName, string DataStr), header of the data and the content of the data.</returns>
-        public static (string DataName, string DataStr) GetData(ulong clientId, FastBufferReader reader, IConfig config = null) {
+        public static (string DataName, string DataStr) GetData(ulong clientId, FastBufferReader reader, IConfig config) {
             try {
                 reader.ReadValue(out string dataName);
 
@@ -99,16 +119,17 @@ namespace oomtm450PuckMod_Template.SystemFunc {
 
                 dataName = dataName.Trim();
 
-                if (!DATANAMES_TO_IGNORE_LOG.Contains(dataName))
-                    Logging.Log($"Received data {dataName} ({length} bytes - {totalLength} total bytes) from {clientId}. Content : {dataStr}", config);
+                if (!DataNamesToIgnore.Contains(dataName))
+                    Logging.Log($"Received data {dataName} ({length} bytes - {totalLength} total bytes) from {(clientId == 0 ? "server" : clientId.ToString())}. Content : {dataStr}", config);
 
                 return (dataName, dataStr);
             }
             catch (Exception ex) {
-                Logging.LogError($"Error when reading streamed data: {ex}");
+                Logging.LogError($"Error when reading streamed data: {ex}", config);
             }
 
             return ("", "");
         }
+        #endregion
     }
 }

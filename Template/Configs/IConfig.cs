@@ -7,5 +7,10 @@
         /// Bool, true if the info logs must be printed.
         /// </summary>
         bool LogInfo { get; set; }
+
+        /// <summary>
+        /// String, name of the mod.
+        /// </summary>
+        string ModName { get; }
     }
 }

@@ -12,10 +12,27 @@ namespace oomtm450PuckMod_Template.Configs {
         /// <summary>
         /// Const string, name used when sending the config data to the client.
         /// </summary>
-        public const string CONFIG_DATA_NAME = Constants.MOD_NAME + "_config";
+        internal const string CONFIG_DATA_NAME = Constants.MOD_NAME + "_config";
         #endregion
 
-        #region Properties
+        #region Fields and Properties
+        /// <summary>
+        /// String, full path for the config file.
+        /// </summary>
+        [JsonIgnore]
+        private readonly string _configPath = Path.Combine(Path.GetFullPath("."), Constants.MOD_NAME + "_serverconfig.json");
+
+        /// <summary>
+        /// Bool, true if the info logs must be printed.
+        /// </summary>
+        public bool LogInfo { get; set; } = true;
+
+        /// <summary>
+        /// String, name of the mod.
+        /// </summary>
+        [JsonIgnore]
+        public string ModName { get; } = Constants.MOD_NAME;
+
         /// <summary>
         /// Int, number of skaters that are allowed on the ice at the same time per team.
         /// </summary>
@@ -36,16 +53,6 @@ namespace oomtm450PuckMod_Template.Configs {
         /// TLDR : Team balancing only if atleast one goalie is playing.
         /// </summary>
         public bool TeamBalancingGoalie { get; set; } = false;
-
-        /// <summary>
-        /// Bool, true if the info logs must be printed.
-        /// </summary>
-        public bool LogInfo { get; set; } = true;
-
-        /// <summary>
-        /// Bool, true if the config has been sent by the server.
-        /// </summary>
-        public bool SentByServer { get; set; } = false;
 
         /// <summary>
         /// Bool, true if admins can bypass the skaters limit.
@@ -86,28 +93,25 @@ namespace oomtm450PuckMod_Template.Configs {
             ServerConfig config = new ServerConfig();
 
             try {
-                string rootPath = Path.GetFullPath(".");
-                string configPath = Path.Combine(rootPath, Constants.MOD_NAME + "_serverconfig.json");
-                if (File.Exists(configPath)) {
-                    string configFileContent = File.ReadAllText(configPath);
+                if (File.Exists(config._configPath)) {
+                    string configFileContent = File.ReadAllText(config._configPath);
                     config = SetConfig(configFileContent);
                     Logging.Log($"Server config read.", config, true);
                 }
 
                 try {
-                    File.WriteAllText(configPath, config.ToString());
+                    File.WriteAllText(config._configPath, config.ToString());
                 }
                 catch (Exception ex) {
-                    Logging.LogError($"Can't write the server config file. (Permission error ?)\n{ex}");
+                    Logging.LogError($"Can't write the server config file. (Permission error ?)\n{ex}", config);
                 }
 
                 Logging.Log($"Wrote server config : {config}", config);
             }
             catch (Exception ex) {
-                Logging.LogError($"Can't read the server config file/folder. (Permission error ?)\n{ex}");
+                Logging.LogError($"Can't read the server config file/folder. (Permission error ?)\n{ex}", config);
             }
 
-            config.SentByServer = true;
             config.AdminSteamIds = adminSteamIds;
             return config;
         }
