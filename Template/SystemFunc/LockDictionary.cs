@@ -13,7 +13,7 @@ namespace oomtm450PuckMod_Template {
         #endregion
 
         #region Properties
-        public Dictionary<TKey, TValue>.KeyCollection Keys {get => _dictionary.Keys; }
+        public Dictionary<TKey, TValue>.KeyCollection Keys { get => _dictionary.Keys; }
 
         public Dictionary<TKey, TValue>.ValueCollection Values { get => _dictionary.Values; }
 
@@ -24,7 +24,8 @@ namespace oomtm450PuckMod_Template {
         public LockDictionary() { }
 
         public LockDictionary(Dictionary<TKey, TValue> dictionary) {
-            _dictionary = dictionary;
+            lock (_locker)
+                _dictionary = new Dictionary<TKey, TValue>(dictionary);
         }
         #endregion
 
@@ -67,6 +68,11 @@ namespace oomtm450PuckMod_Template {
         public bool Remove(TKey key) {
             lock (_locker)
                 return _dictionary.Remove(key);
+        }
+
+        public bool ContainsKey(TKey key) {
+            lock (_locker)
+                return _dictionary.ContainsKey(key);
         }
 
         public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() {

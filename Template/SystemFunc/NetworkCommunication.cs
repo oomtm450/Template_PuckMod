@@ -1,6 +1,7 @@
 ﻿using oomtm450PuckMod_Template.Configs;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Unity.Collections;
 using Unity.Netcode;
@@ -47,7 +48,9 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="clientId">Ulong, Id of the client that is sending the data.</param>
         /// <param name="listener">String, listener where to send the data.</param>
         /// <param name="config">IConfig, config for the logs.</param>
-        public static void SendData(string dataName, string dataStr, ulong clientId, string listener, IConfig config) {
+        /// <param name="networkDelivery">NetworkDelivery, type of delivery for the packets.</param>
+        public static void SendData(string dataName, string dataStr, ulong clientId, string listener, IConfig config,
+            NetworkDelivery networkDelivery = NetworkDelivery.ReliableFragmentedSequenced) {
             try {
                 byte[] data = Encoding.UTF8.GetBytes(dataStr);
 
@@ -57,12 +60,12 @@ namespace oomtm450PuckMod_Template.SystemFunc {
                 writer.WriteValue(dataName);
                 writer.WriteBytes(data);
 
-                NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage(listener, clientId, writer, NetworkDelivery.ReliableFragmentedSequenced);
+                NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage(listener, clientId, writer, networkDelivery);
 
                 writer.Dispose();
 
-                if (!DataNamesToIgnore.Contains(dataName))
-                    Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to {clientId}.", config);
+                if (!DataNamesToIgnore.Any(x => dataName.StartsWith(x)))
+                    Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to {clientId} with listener {listener}.", config);
             }
             catch (Exception ex) {
                 Logging.LogError($"Error when writing streamed data: {ex}", config);
@@ -76,7 +79,9 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="dataStr">String, content of the data.</param>
         /// <param name="listener">String, listener where to send the data.</param>
         /// <param name="config">IConfig, config for the logs.</param>
-        public static void SendDataToAll(string dataName, string dataStr, string listener, IConfig config) {
+        /// <param name="networkDelivery">NetworkDelivery, type of delivery for the packets.</param>
+        public static void SendDataToAll(string dataName, string dataStr, string listener, IConfig config,
+            NetworkDelivery networkDelivery = NetworkDelivery.ReliableFragmentedSequenced) {
             try {
                 byte[] data = Encoding.UTF8.GetBytes(dataStr);
 
@@ -86,12 +91,12 @@ namespace oomtm450PuckMod_Template.SystemFunc {
                 writer.WriteValue(dataName);
                 writer.WriteBytes(data);
 
-                NetworkManager.Singleton.CustomMessagingManager.SendNamedMessageToAll(listener, writer, NetworkDelivery.ReliableFragmentedSequenced);
+                NetworkManager.Singleton.CustomMessagingManager.SendNamedMessageToAll(listener, writer, networkDelivery);
 
                 writer.Dispose();
 
-                if (!DataNamesToIgnore.Contains(dataName))
-                    Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to all clients.", config);
+                if (!DataNamesToIgnore.Any(x => dataName.StartsWith(x)))
+                    Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to all clients with listener {listener}.", config);
             }
             catch (Exception ex) {
                 Logging.LogError($"Error when writing streamed data: {ex}", config);
@@ -106,8 +111,9 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <param name="config">IConfig, config for the logs.</param>
         /// <returns>(string DataName, string DataStr), header of the data and the content of the data.</returns>
         public static (string DataName, string DataStr) GetData(ulong clientId, FastBufferReader reader, IConfig config) {
+            string dataName = "?";
             try {
-                reader.ReadValue(out string dataName);
+                reader.ReadValue(out dataName);
 
                 int length = reader.Length - reader.Position;
                 int totalLength = length + sizeof(ulong) + Encoding.UTF8.GetByteCount(dataName);
@@ -119,13 +125,13 @@ namespace oomtm450PuckMod_Template.SystemFunc {
 
                 dataName = dataName.Trim();
 
-                if (!DataNamesToIgnore.Contains(dataName))
+                if (!DataNamesToIgnore.Any(x => dataName.StartsWith(x)))
                     Logging.Log($"Received data {dataName} ({length} bytes - {totalLength} total bytes) from {(clientId == 0 ? "server" : clientId.ToString())}. Content : {dataStr}", config);
 
                 return (dataName, dataStr);
             }
             catch (Exception ex) {
-                Logging.LogError($"Error when reading streamed data: {ex}", config);
+                Logging.LogError($"Error from cliend Id {clientId} when reading streamed data \"{dataName}\": {ex}", config);
             }
 
             return ("", "");

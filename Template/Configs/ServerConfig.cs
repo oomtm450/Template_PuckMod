@@ -1,7 +1,9 @@
 ﻿using Newtonsoft.Json;
 using oomtm450PuckMod_Template.SystemFunc;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace oomtm450PuckMod_Template.Configs {
     /// <summary>
@@ -15,7 +17,7 @@ namespace oomtm450PuckMod_Template.Configs {
         internal const string CONFIG_DATA_NAME = Constants.MOD_NAME + "_config";
         #endregion
 
-        #region Fields and Properties
+        #region Fields/Properties
         /// <summary>
         /// String, full path for the config file.
         /// </summary>
@@ -32,6 +34,11 @@ namespace oomtm450PuckMod_Template.Configs {
         /// </summary>
         [JsonIgnore]
         public string ModName { get; } = Constants.MOD_NAME;
+
+        /// <summary>
+        /// Bool, true if the numeric values has to be replaced be the default ones. Make this false to use custom values.
+        /// </summary>
+        public bool UseDefaultNumericValues { get; set; } = true;
 
         /// <summary>
         /// Int, number of skaters that are allowed on the ice at the same time per team.
@@ -65,7 +72,70 @@ namespace oomtm450PuckMod_Template.Configs {
         public string[] AdminSteamIds { get; set; }
         #endregion
 
+        #region Constructors
+        /// <summary>
+        /// Default constructor of ServerConfig.
+        /// </summary>
+        public ServerConfig() { }
+
+        /// <summary>
+        /// Copy constructor of ServerConfig.
+        /// </summary>
+        /// <param name="serverConfig">ServerConfig, config to copy.</param>
+        public ServerConfig(ServerConfig serverConfig) {
+            LogInfo = serverConfig.LogInfo;
+            ModName = serverConfig.ModName;
+            UseDefaultNumericValues = serverConfig.UseDefaultNumericValues;
+
+            MaxNumberOfSkaters = serverConfig.MaxNumberOfSkaters;
+            TeamBalancing = serverConfig.TeamBalancing;
+            TeamBalanceOffset = serverConfig.TeamBalanceOffset;
+            TeamBalancingGoalie = serverConfig.TeamBalancingGoalie;
+
+            AdminBypass = serverConfig.AdminBypass;
+            AdminSteamIds = serverConfig.AdminSteamIds;
+        }
+        #endregion
+
         #region Methods/Functions
+        /// <summary>
+        /// Method that updates this config with the new default values, if the old default values were used.
+        /// </summary>
+        /// <param name="oldConfig">ISubConfig, config with old values.</param>
+        public void UpdateDefaultValues(ISubConfig oldConfig) {
+            if (!(oldConfig is OldServerConfig))
+                throw new ArgumentException($"oldConfig has to be typeof {nameof(OldServerConfig)}.", nameof(oldConfig));
+
+            OldServerConfig _oldConfig = oldConfig as OldServerConfig;
+            ServerConfig newConfig = new ServerConfig();
+
+            /*if (LogInfo == _oldConfig.LogInfo)
+                LogInfo = newConfig.LogInfo;*/
+
+            if (MaxNumberOfSkaters == _oldConfig.MaxNumberOfSkaters)
+                MaxNumberOfSkaters = newConfig.MaxNumberOfSkaters;
+
+            if (TeamBalancing == _oldConfig.TeamBalancing)
+                TeamBalancing = newConfig.TeamBalancing;
+
+            if (TeamBalanceOffset == _oldConfig.TeamBalanceOffset)
+                TeamBalanceOffset = newConfig.TeamBalanceOffset;
+
+            /*if (AdminSteamIds.Count() != _oldConfig.AdminSteamIds.Count())
+                AdminSteamIds = new List<string>(_oldConfig.AdminSteamIds).ToArray();
+            else {
+                foreach (string oldAdminSteamId in new List<string>(_oldConfig.AdminSteamIds)) {
+                    if (!AdminSteamIds.Contains(oldAdminSteamId)) {
+                        AdminSteamIds = new List<string>(_oldConfig.AdminSteamIds).ToArray();
+                        break;
+                    }
+                }
+            }*/
+
+            if (AdminBypass == _oldConfig.AdminBypass)
+                AdminBypass = newConfig.AdminBypass;
+        }
+
         /// <summary>
         /// Function that serialize the config object.
         /// </summary>
@@ -93,20 +163,36 @@ namespace oomtm450PuckMod_Template.Configs {
             ServerConfig config = new ServerConfig();
 
             try {
-                if (File.Exists(config._configPath)) {
-                    string configFileContent = File.ReadAllText(config._configPath);
+                string rootPath = Path.GetFullPath(".");
+                string configPath = Path.Combine(rootPath, Constants.MOD_NAME + "_serverconfig.json");
+                if (File.Exists(configPath)) {
+                    string configFileContent = File.ReadAllText(configPath);
                     config = SetConfig(configFileContent);
                     Logging.Log($"Server config read.", config, true);
                 }
 
+                config.UpdateDefaultValues(new OldServerConfig());
+
                 try {
-                    File.WriteAllText(config._configPath, config.ToString());
+                    File.WriteAllText(configPath, config.ToString());
                 }
                 catch (Exception ex) {
                     Logging.LogError($"Can't write the server config file. (Permission error ?)\n{ex}", config);
                 }
 
-                Logging.Log($"Wrote server config : {config}", config);
+                Logging.Log($"Wrote server config : {config}", config, true);
+
+                if (config.UseDefaultNumericValues) {
+                    ServerConfig defaultConfig = new ServerConfig {
+                        LogInfo = config.LogInfo,
+                        UseDefaultNumericValues = config.UseDefaultNumericValues,
+                        TeamBalancing = config.TeamBalancing,
+                        TeamBalancingGoalie = config.TeamBalancingGoalie,
+                        AdminBypass = config.AdminBypass,
+                    };
+
+                    config = defaultConfig;
+                }
             }
             catch (Exception ex) {
                 Logging.LogError($"Can't read the server config file/folder. (Permission error ?)\n{ex}", config);

@@ -8,7 +8,7 @@ namespace oomtm450PuckMod_Template.Configs {
     /// Class containing the configuration from oomtm450_template_clientconfig.json used for this mod.
     /// </summary>
     public class ClientConfig : IConfig {
-        #region Fields and Properties
+        #region Fields/Properties
         /// <summary>
         /// String, full path for the config file.
         /// </summary>
