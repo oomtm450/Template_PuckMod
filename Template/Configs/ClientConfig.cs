@@ -13,7 +13,7 @@ namespace oomtm450PuckMod_Template.Configs {
         /// String, full path for the config file.
         /// </summary>
         [JsonIgnore]
-        private readonly string _configPath = Path.Combine(Path.GetFullPath("."), Constants.MOD_NAME + "_serverconfig.json");
+        private readonly string _configPath = Path.Combine(Path.GetFullPath("."), Constants.MOD_NAME + "_clientconfig.json");
 
         /// <summary>
         /// Bool, true if the info logs must be printed.
