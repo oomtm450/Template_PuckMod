@@ -29,6 +29,7 @@ namespace oomtm450PuckMod_Template {
         /// ReadOnlyCollection of string, collection of datanames to not log.
         /// </summary>
         private static readonly ReadOnlyCollection<string> DATA_NAMES_TO_IGNORE = new ReadOnlyCollection<string>(new List<string> {
+            "eventName",
         });
         #endregion
 
