@@ -78,6 +78,11 @@ namespace oomtm450PuckMod_Template {
                 return _list.IndexOf(item);
         }
 
+        public void Insert(int index, T item) {
+            lock (_locker)
+                _list.Insert(index, item);
+        }
+
         public IEnumerator<T> GetEnumerator() {
             lock (_locker)
                 return _list.GetEnumerator();

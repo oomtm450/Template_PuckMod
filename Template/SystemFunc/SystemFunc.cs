@@ -1,15 +1,43 @@
 ﻿using System;
-using System.IO;
-using System.IO.Pipes;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using UnityEngine;
 
 namespace oomtm450PuckMod_Template.SystemFunc {
     public static class SystemFunc {
         public static T GetPrivateField<T>(Type typeContainingField, object instanceOfType, string fieldName) {
-            return (T)typeContainingField.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(instanceOfType);
+            if (instanceOfType == null)
+                return (T)typeContainingField.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static).GetValue(instanceOfType);
+            else
+                return (T)typeContainingField.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(instanceOfType);
+        }
+
+        public static void AddClientChatMessage(string message) {
+            ChatMessage chatMsg = new ChatMessage {
+                SteamID = null,
+                Username = null,
+                Team = null,
+                Content = message,
+                Timestamp = Utils.GetTimestamp(),
+                IsQuickChat = false,
+                IsTeamChat = false,
+                IsSystem = true,
+            };
+            ChatManager.Instance.AddChatMessage(chatMsg);
+        }
+
+        public static void SendChatMessageToClients(string message, params ulong[] clientIds) {
+            ChatMessage chatMsg = new ChatMessage {
+                SteamID = null,
+                Username = null,
+                Team = null,
+                Content = message,
+                Timestamp = Utils.GetTimestamp(),
+                IsQuickChat = false,
+                IsTeamChat = false,
+                IsSystem = true,
+            };
+            ChatManager.Instance.Server_SendChatMessage(chatMsg, clientIds);
         }
 
         /// <summary>
@@ -22,18 +50,25 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         }
 
         /// <summary>
-        /// Function that returns a PlayerBodyV2 instance from a GameObject.
+        /// Function that returns a PlayerBody instance from a GameObject.
         /// </summary>
         /// <param name="gameObject">GameObject, GameObject to use.</param>
-        /// <returns>PlayerBodyV2, found PlayerBodyV2 object or null.</returns>
-        public static PlayerBodyV2 GetPlayerBodyV2(GameObject gameObject) {
-            return gameObject.GetComponent<PlayerBodyV2>();
+        /// <returns>PlayerBody, found PlayerBody object or null.</returns>
+        public static PlayerBody GetPlayerBody(GameObject gameObject) {
+            return gameObject.GetComponent<PlayerBody>();
         }
 
         public static string RemoveWhitespace(string input) {
             return new string(input
                 .Where(c => !Char.IsWhiteSpace(c))
                 .ToArray());
+        }
+
+        public static float GetDistance(float x1, float z1, float x2, float z2) {
+            Vector2 vector1 = new Vector2(x1, z1);
+            Vector2 vector2 = new Vector2(x2, z2);
+
+            return Vector2.Distance(vector1, vector2);
         }
     }
 }

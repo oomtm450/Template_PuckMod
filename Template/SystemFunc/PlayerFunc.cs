@@ -1,4 +1,5 @@
 ﻿using oomtm450PuckMod_Template.Configs;
+using System.Linq;
 
 namespace oomtm450PuckMod_Template.SystemFunc {
     internal class PlayerFunc {
@@ -38,21 +39,30 @@ namespace oomtm450PuckMod_Template.SystemFunc {
 
         #region Methods/Functions
         /// <summary>
-        /// Function that checks if the current client is an admin using the config.
+        /// Function that checks if a player is on the ice playing.
         /// </summary>
-        /// <param name="serverConfig">ServerConfig, config to use to check the admin steam Ids.</param>
-        /// <param name="currentConfig">IConfig, config to use to check if info must be logged.</param>
-        /// <returns>Bool, true if the client is an admin of the server.</returns>
-        internal static bool IsAdmin(ServerConfig serverConfig, IConfig currentConfig) {
-            Player currentPlayer = PlayerManager.Instance.GetLocalPlayer();
-            foreach (string adminSteamId in serverConfig.AdminSteamIds) {
-                if (adminSteamId == currentPlayer.SteamId.Value.ToString()) {
-                    Logging.Log($"{adminSteamId} is an admin.", currentConfig);
-                    return true;
-                }
-            }
+        /// <param name="player">Player, player to check.</param>
+        /// <returns>Bool, is player playing or not.</returns>
+        public static bool IsPlayerPlaying(Player player) {
+            return !(!player || player.Role == PlayerRole.None || !player.IsCharacterSpawned || (player.Team != PlayerTeam.Red && player.Team != PlayerTeam.Blue));
+        }
 
-            return false;
+        /// <summary>
+        /// Function that finds a team's goalie.
+        /// </summary>
+        /// <param name="team">PlayerTeam, team of the goalie.</param>
+        /// <returns>Player, goalie found or null.</returns>
+        public static Player GetTeamGoalie(PlayerTeam team) {
+            return PlayerManager.Instance.GetPlayersByTeam(team).FirstOrDefault(x => x.Role == PlayerRole.Goalie);
+        }
+
+        /// <summary>
+        /// Function that finds the other team's goalie.
+        /// </summary>
+        /// <param name="team">PlayerTeam, opposing team of the goalie.</param>
+        /// <returns>Player, goalie found or null.</returns>
+        public static Player GetOtherTeamGoalie(PlayerTeam team) {
+            return PlayerManager.Instance.GetPlayersByTeam(TeamFunc.GetOtherTeam(team)).FirstOrDefault(x => x.Role == PlayerRole.Goalie);
         }
 
         /// <summary>

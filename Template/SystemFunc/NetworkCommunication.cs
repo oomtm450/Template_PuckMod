@@ -15,7 +15,7 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// <summary>
         /// ReadOnlyCollection of string, collection of datanames to not log.
         /// </summary>
-        private static readonly List<string> DataNamesToIgnore = new List<string>();
+        private static readonly LockList<string> DataNamesToIgnore = new LockList<string>();
         #endregion
 
         #region Methods/Functions
@@ -24,7 +24,10 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         /// </summary>
         /// <param name="dataNamesToNotLog">ICollection of string, data names to add to the to not log list.</param>
         public static void AddToNotLogList(ICollection<string> dataNamesToNotLog) {
-            DataNamesToIgnore.AddRange(dataNamesToNotLog);
+            foreach (string dataName in dataNamesToNotLog) {
+                if (!DataNamesToIgnore.Contains(dataName))
+                    DataNamesToIgnore.Add(dataName);
+            }
         }
 
         /// <summary>
@@ -54,18 +57,18 @@ namespace oomtm450PuckMod_Template.SystemFunc {
             try {
                 byte[] data = Encoding.UTF8.GetBytes(dataStr);
 
-                int size = Encoding.UTF8.GetByteCount(dataName) + sizeof(ulong) + data.Length;
+                int size = FastBufferWriter.GetWriteSize(dataName) + sizeof(ulong) + FastBufferWriter.GetWriteSize(data);
 
                 FastBufferWriter writer = new FastBufferWriter(size, Allocator.TempJob);
-                writer.WriteValue(dataName);
-                writer.WriteBytes(data);
+                writer.WriteValueSafe(dataName);
+                writer.WriteBytesSafe(data);
 
                 NetworkManager.Singleton.CustomMessagingManager.SendNamedMessage(listener, clientId, writer, networkDelivery);
 
                 writer.Dispose();
 
                 if (!DataNamesToIgnore.Any(x => dataName.StartsWith(x)))
-                    Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to {clientId} with listener {listener}.", config);
+                    Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to {clientId} with listener {listener}. Content : \"{dataStr}\"", config);
             }
             catch (Exception ex) {
                 Logging.LogError($"Error when writing streamed data: {ex}", config);
@@ -83,20 +86,29 @@ namespace oomtm450PuckMod_Template.SystemFunc {
         public static void SendDataToAll(string dataName, string dataStr, string listener, IConfig config,
             NetworkDelivery networkDelivery = NetworkDelivery.ReliableFragmentedSequenced) {
             try {
+                if (NetworkManager.Singleton == null) {
+                    Logging.LogError($"NetworkManager.Singleton is null.", config);
+                    return;
+                }
+                if (NetworkManager.Singleton.CustomMessagingManager == null) {
+                    Logging.LogError($"NetworkManager.Singleton.CustomMessagingManager is null.", config);
+                    return;
+                }
+
                 byte[] data = Encoding.UTF8.GetBytes(dataStr);
 
-                int size = Encoding.UTF8.GetByteCount(dataName) + sizeof(ulong) + data.Length;
+                int size = FastBufferWriter.GetWriteSize(dataName) + sizeof(ulong) + FastBufferWriter.GetWriteSize(data);
 
                 FastBufferWriter writer = new FastBufferWriter(size, Allocator.TempJob);
-                writer.WriteValue(dataName);
-                writer.WriteBytes(data);
+                writer.WriteValueSafe(dataName);
+                writer.WriteBytesSafe(data);
 
                 NetworkManager.Singleton.CustomMessagingManager.SendNamedMessageToAll(listener, writer, networkDelivery);
 
                 writer.Dispose();
 
                 if (!DataNamesToIgnore.Any(x => dataName.StartsWith(x)))
-                    Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to all clients with listener {listener}.", config);
+                    Logging.Log($"Sent data \"{dataName}\" ({data.Length} bytes - {size} total bytes) to all clients with listener {listener}. Content : \"{dataStr}\"", config);
             }
             catch (Exception ex) {
                 Logging.LogError($"Error when writing streamed data: {ex}", config);
@@ -116,22 +128,22 @@ namespace oomtm450PuckMod_Template.SystemFunc {
                 reader.ReadValue(out dataName);
 
                 int length = reader.Length - reader.Position;
-                int totalLength = length + sizeof(ulong) + Encoding.UTF8.GetByteCount(dataName);
+                int totalLength = length + sizeof(ulong) + FastBufferWriter.GetWriteSize(dataName);
                 byte[] data = new byte[length];
                 for (int i = 0; i < length; i++)
-                    reader.ReadByte(out data[i]);
+                    reader.ReadByteSafe(out data[i]);
 
                 string dataStr = Encoding.UTF8.GetString(data).Trim();
 
                 dataName = dataName.Trim();
 
                 if (!DataNamesToIgnore.Any(x => dataName.StartsWith(x)))
-                    Logging.Log($"Received data {dataName} ({length} bytes - {totalLength} total bytes) from {(clientId == 0 ? "server" : clientId.ToString())}. Content : {dataStr}", config);
+                    Logging.Log($"Received data \"{dataName}\" ({length} bytes - {totalLength} total bytes) from {(clientId == 0 ? "server" : clientId.ToString())}. Content : \"{dataStr}\"", config);
 
                 return (dataName, dataStr);
             }
             catch (Exception ex) {
-                Logging.LogError($"Error from cliend Id {clientId} when reading streamed data \"{dataName}\": {ex}", config);
+                Logging.LogError($"Error from client Id {clientId} when reading streamed data \"{dataName}\": {ex}", config);
             }
 
             return ("", "");
