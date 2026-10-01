@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace oomtm450PuckMod_Template.Configs {
+﻿namespace oomtm450PuckMod_Template.Configs {
     /// <summary>
     /// Class containing the old configuration from oomtm450_ruleset_serverconfig.json used for this mod.
     /// </summary>

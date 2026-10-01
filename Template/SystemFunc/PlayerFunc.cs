@@ -1,5 +1,4 @@
-﻿using oomtm450PuckMod_Template.Configs;
-using System.Linq;
+﻿using System.Linq;
 
 namespace oomtm450PuckMod_Template.SystemFunc {
     internal class PlayerFunc {
